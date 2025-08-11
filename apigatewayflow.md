@@ -137,3 +137,7 @@ ws.onmessage = (event) => {
 ---
 
 もし希望があれば、このまま**API Gateway WebSocketの設定例**と**SageMakerエンドポイント準備のポイント**もMarkdownで追記できますが、続けますか？
+
+
+## 本格構成例 (webrtc+KVS)
+https://github.com/aws-samples/python-samples-for-amazon-kinesis-video-streams-with-webrtc/tree/main
