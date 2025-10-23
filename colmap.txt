@@ -1,0 +1,155 @@
+とても良い質問です。
+「**COLMAPで既に reconstruct した scene（binファイル群）を使って、新しいテスト画像のカメラ姿勢（位置・向き）を推定したい**」ということですね。
+
+これは一般的に **画像ローカライゼーション (image localization)**、または **structure-from-motion map re-localization** と呼ばれる手順で、COLMAPでは以下のように行います。
+
+---
+
+## ✅ 前提
+
+あなたが既に持っているもの：
+
+```
+/path/to/project/
+├── images/                # トレーニング画像
+├── sparse/0/
+│   ├── cameras.bin
+│   ├── images.bin
+│   └── points3D.bin
+└── database.db            # reconstruct時のデータベース
+```
+
+これが **既に reconstruct 済みのモデル** です。
+これを使って新しい画像 `query.jpg` の **カメラの姿勢 (R, t)** を推定します。
+
+---
+
+## 🧭 手順概要
+
+1. **テスト画像を特徴抽出**
+2. **マップの特徴とマッチング**
+3. **PnP + RANSAC によるポーズ推定**
+4. （オプション）バンドル調整で最適化
+
+COLMAP にはこれを自動でやってくれるコマンドが用意されています。
+
+---
+
+## 🔧 手順詳細
+
+### 1️⃣ 特徴抽出（Feature Extraction）
+
+まず、既存の `database.db` に新しい画像を登録します。
+
+```bash
+colmap feature_extractor \
+    --database_path /path/to/project/database.db \
+    --image_path /path/to/query_images \
+    --ImageReader.single_camera 1 \
+    --ImageReader.camera_model SIMPLE_RADIAL
+```
+
+* `--database_path` … reconstruct に使った database を指定
+* `--image_path` … 新しいテスト画像の入ったディレクトリ
+* カメラパラメータは既存モデルと合わせるのが望ましいです
+
+---
+
+### 2️⃣ 特徴マッチング（Feature Matching）
+
+マップの画像（既存）とテスト画像の間でマッチングを行います。
+再構築済みモデルを利用する場合は **`image_registrator`** が便利です。
+
+```bash
+colmap image_registrator \
+    --database_path /path/to/project/database.db \
+    --input_path /path/to/project/sparse/0 \
+    --output_path /path/to/output_registered
+```
+
+これにより：
+
+* `sparse/0/` にある既存モデル（binファイル）を使い
+* 新しい画像を同じワールド座標系に登録
+* 推定されたカメラ姿勢を含む新しい `images.bin` が `/path/to/output_registered` に出力されます。
+
+---
+
+### 3️⃣ 出力確認
+
+結果として `/path/to/output_registered/images.bin` に
+新しい画像のカメラ姿勢（回転・並進）が含まれます。
+
+確認したい場合は、COLMAPのコマンドラインで：
+
+```bash
+colmap model_converter \
+    --input_path /path/to/output_registered \
+    --output_path /path/to/output_registered_txt \
+    --output_type TXT
+```
+
+すると、`images.txt` に以下のように出力されます：
+
+```
+# Image list with two lines of data per image:
+#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME
+#   POINTS2D[] as (X, Y, POINT3D_ID)
+1 0.992 -0.024 0.117 0.039 -0.139 0.048 0.002 1 query.jpg
+...
+```
+
+ここで
+
+* `(QW, QX, QY, QZ)` = クォータニオン（カメラの向き）
+* `(TX, TY, TZ)` = 並進ベクトル（位置）
+
+です。
+
+---
+
+### 4️⃣ （オプション）可視化
+
+推定結果をGUIで確認したい場合：
+
+```bash
+colmap gui
+```
+
+GUIを開いたあと、
+「**File → Import model**」で `/path/to/output_registered` を読み込むと
+既存モデルと新しいカメラ位置が一緒に表示されます。
+
+---
+
+## 🔍 まとめ
+
+| ステップ | コマンド                       | 内容           |
+| ---- | -------------------------- | ------------ |
+| 1    | `colmap feature_extractor` | 新しい画像の特徴抽出   |
+| 2    | `colmap image_registrator` | 既存モデルに新画像を登録 |
+| 3    | `colmap model_converter`   | 推定結果をテキストで確認 |
+
+---
+
+## 💡 補足
+
+* `image_registrator` は内部で特徴マッチングとPnPを自動で行います。
+  これが最も簡単な「ローカライゼーション」手法です。
+* もし `image_registrator` がうまくいかない場合は、
+  代わりに以下を組み合わせて手動で行うことも可能です：
+
+  ```
+  colmap feature_matcher
+  colmap mapper
+  colmap model_aligner
+  ```
+* Pythonから直接処理したい場合は、
+  COLMAPの `read_write_model.py` を使って `images.bin` を読み取り、
+  姿勢情報をNumPy行列として扱えます。
+
+---
+
+もしよければ、あなたが持っているファイル構成（例：`database.db` と `sparse/0/` の場所）を教えてもらえれば、
+実際のパスに合わせたコマンド例を正確に書いてあげられます。
+やってみますか？
