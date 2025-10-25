@@ -1,0 +1,103 @@
+了解です 👍
+「HLOCを使って推論（＝既存モデルを使った特徴抽出・マッチング・ポーズ推定）」だけ行いたい 場合は、
+GPU環境でも比較的軽量構成でOKです。
+その前提で、最適なAMIと設定を以下に整理します👇
+
+⸻
+
+🎯 結論：推論用に最も安全・手軽な構成
+
+項目	推奨
+AMI	✅ Deep Learning AMI GPU PyTorch 2.3.0 (Ubuntu 22.04)
+インスタンス	💡 g4dn.xlarge（T4 GPU 1枚, メモリ16GB）
+目的	HLOCによる特徴抽出・マッチング・ローカリゼーション（推論のみ）
+理由	GPUドライバ＋CUDA＋Docker＋PyTorchが全てセットアップ済み。追加構築不要。
+
+
+⸻
+
+🧩 構成のポイント（推論向け最適化）
+
+1️⃣ GPUを軽く使えるベース環境
+
+Deep Learning AMI (DLAMI) ではすでに以下がインストール済み：
+	•	CUDA 12.x + cuDNN 8.x
+	•	NVIDIAドライバ（T4対応）
+	•	Docker & nvidia-docker2
+	•	PyTorch, TorchVision, NumPy, OpenCV など
+
+このため、AMI起動後すぐに確認できます：
+
+nvidia-smi
+python3 -c "import torch; print(torch.cuda.is_available())"
+
+
+⸻
+
+2️⃣ Dockerイメージ構築（推論用に軽量化）
+
+訓練不要なので、開発ツールやビルド依存を省いたDockerfileでOKです👇
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+RUN apt-get update && apt-get install -y \
+    git python3-pip libopencv-dev && \
+    pip install --no-cache-dir opencv-python h5py
+
+WORKDIR /app
+RUN git clone https://github.com/cvg/hloc.git && \
+    pip install --no-cache-dir -r hloc/requirements.txt
+
+WORKDIR /app/hloc
+CMD ["bash"]
+
+ビルド：
+
+docker build -t hloc-infer:latest .
+
+実行：
+
+docker run --gpus all -it hloc-infer:latest
+
+
+⸻
+
+3️⃣ 推論時のポイント
+	•	HLOCは学習済みモデル（SuperPoint, SuperGlueなど）を自動でダウンロードします。
+→ つまり、自前で学習やチェックポイント準備は不要。
+	•	例：画像間マッチング
+
+python -m hloc.pipelines.match_pairs --features superpoint_aachen --matches superglue
+
+
+	•	CPUでも動くが、GPUを有効にすると処理が大幅に高速化します。
+（特にSuperPoint/SuperGlue部分）
+
+⸻
+
+4️⃣ 代替AMIを選びたい場合
+
+用途	AMI
+できるだけクリーンで軽量にしたい	Ubuntu 22.04 LTS + 手動でNVIDIAドライバ＋nvidia-container-toolkit導入
+コスト重視（GPU省略）	t3.xlargeなどCPUインスタンス（ただし推論は遅くなる）
+
+
+⸻
+
+✅ まとめ
+
+項目	内容
+AMI選択	Deep Learning AMI GPU PyTorch 2.3.0 (Ubuntu 22.04)
+インスタンス	g4dn.xlarge
+目的	HLOC推論（特徴抽出・マッチング・ローカリゼーション）
+Docker構成	pytorch/pytorch:2.3.0-cuda12.1 ベースで軽量化
+CUDA確認コマンド	nvidia-smi, python3 -c "import torch; print(torch.cuda.is_available())"
+
+
+⸻
+
+希望があれば、
+👉「HLOCの推論を一発で実行するスクリプト（例：run_inference.sh）」
+も作成できます。
+
+作りましょうか？
