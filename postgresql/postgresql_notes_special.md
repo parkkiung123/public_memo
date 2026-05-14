@@ -326,3 +326,6 @@ ORDER BY d.order_date;
 | `WITH` | 複雑なSQLを読みやすく分割 |
 | ウィンドウ関数 | ランキング、累計、前後比較 |
 | `generate_series` | 日付一覧や連番を作る |
+
+## csvで高速INSERT
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "\copy target_table FROM 'data_from_java.csv' WITH CSV"
