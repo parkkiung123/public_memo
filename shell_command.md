@@ -92,8 +92,22 @@ fi
 * ループ：
 
 ```bash
-for i in ...; do
+for i in {1..10}; do
+    echo "$i 秒..."
+    sleep 1  # 1秒待機するコマンド
 done
+for ((i=1; i<=10; i++)); do
+    echo "$i 秒..."
+    sleep 1
+done
+i=1
+while [[ $i -le 10 ]]; do
+    echo "$i 秒..."
+    sleep 1
+    # カウンタを1増やす (忘れると無限ループになるので注意！)
+    i=$((i + 1))
+done
+echo "10秒経過しました。"
 ```
 
 * 引数：
