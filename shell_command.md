@@ -85,7 +85,11 @@ cat list | xargs rm
 * 条件分岐：
 
 ```bash
-if [ condition ]; then
+if [ $RET_CODE -ne 0 ]; then
+    echo "【ERROR】Javaプログラムが異常終了しました (Code: $RET_CODE)"
+    exit 1
+else
+    echo "【OK】Javaプログラムは正常終了しました (Code: $RET_CODE)"
 fi
 ```
 
